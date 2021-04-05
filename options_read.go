@@ -24,6 +24,9 @@ const (
 // database.
 type ReadOptions struct {
 	c *C.rocksdb_readoptions_t
+	// ReadOptions should hold the memory during its life-cycle
+	upperBound []byte
+	lowerBound []byte
 }
 
 // NewDefaultReadOptions creates a default ReadOptions object.
@@ -33,7 +36,7 @@ func NewDefaultReadOptions() *ReadOptions {
 
 // NewNativeReadOptions creates a ReadOptions object.
 func NewNativeReadOptions(c *C.rocksdb_readoptions_t) *ReadOptions {
-	return &ReadOptions{c}
+	return &ReadOptions{c, nil, nil}
 }
 
 // UnsafeGetReadOptions returns the underlying c read options object.
@@ -104,6 +107,7 @@ func (opts *ReadOptions) SetTailing(value bool) {
 // implemented.
 // Default: nullptr
 func (opts *ReadOptions) SetIterateUpperBound(key []byte) {
+	opts.upperBound = key
 	cKey := byteToChar(key)
 	cKeyLen := C.size_t(len(key))
 	C.rocksdb_readoptions_set_iterate_upper_bound(opts.c, cKey, cKeyLen)
@@ -111,6 +115,7 @@ func (opts *ReadOptions) SetIterateUpperBound(key []byte) {
 
 // Default: nullptr
 func (opts *ReadOptions) SetIterateLowerBound(key []byte) {
+	opts.lowerBound = key
 	cKey := byteToChar(key)
 	cKeyLen := C.size_t(len(key))
 	C.rocksdb_readoptions_set_iterate_lower_bound(opts.c, cKey, cKeyLen)
@@ -140,4 +145,6 @@ func (opts *ReadOptions) SetReadaheadSize(value uint64) {
 func (opts *ReadOptions) Destroy() {
 	C.rocksdb_readoptions_destroy(opts.c)
 	opts.c = nil
+	opts.upperBound = nil
+	opts.lowerBound = nil
 }
