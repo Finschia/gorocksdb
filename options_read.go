@@ -109,6 +109,13 @@ func (opts *ReadOptions) SetIterateUpperBound(key []byte) {
 	C.rocksdb_readoptions_set_iterate_upper_bound(opts.c, cKey, cKeyLen)
 }
 
+// Default: nullptr
+func (opts *ReadOptions) SetIterateLowerBound(key []byte) {
+	cKey := byteToChar(key)
+	cKeyLen := C.size_t(len(key))
+	C.rocksdb_readoptions_set_iterate_lower_bound(opts.c, cKey, cKeyLen)
+}
+
 // SetPinData specifies the value of "pin_data". If true, it keeps the blocks
 // loaded by the iterator pinned in memory as long as the iterator is not deleted,
 // If used when reading from tables created with
