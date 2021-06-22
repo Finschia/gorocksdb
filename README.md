@@ -1,4 +1,4 @@
-# gorocksdb, a Go wrapper for RocksDB
+# Forked gorocksdb, a Go wrapper for RocksDB for LFB
 
 [![Build Status](https://travis-ci.org/tecbot/gorocksdb.svg)](https://travis-ci.org/tecbot/gorocksdb) [![GoDoc](https://godoc.org/github.com/tecbot/gorocksdb?status.svg)](http://godoc.org/github.com/tecbot/gorocksdb)
 
