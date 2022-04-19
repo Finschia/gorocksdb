@@ -1,0 +1,115 @@
+name: CI on Docker with RocksDB
+on:
+  pull_request:
+  push:
+
+env:
+  DOCKER_IMAGE: line/gorocksdb-testing
+
+jobs:
+  cleanup-runs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: rokroskar/workflow-run-cleanup-action@master
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+    if: "!startsWith(github.ref, 'refs/tags/') && github.ref != 'refs/heads/main'"
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+
+      - name: Prepare
+        id: prep
+        run: |
+          VERSION=latest
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          elif [[ $GITHUB_REF == refs/heads/* ]]; then
+            VERSION=$(echo ${GITHUB_REF#refs/heads/} | sed -r 's#/+#-#g')
+            if [ "${{ github.event.repository.default_branch }}" = "$VERSION" ]; then
+              VERSION=latest
+            fi
+          fi
+          TAGS="${{ DOCKER_IMAGE }}:${VERSION}"
+          echo ::set-output name=tags::${TAGS}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Cache Docker layers
+        uses: actions/cache@v2
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+#      - name: Login to DockerHub
+#        if: github.event_name != 'pull_request'
+#        uses: docker/login-action@v1
+#        with:
+#          username: ${{ secrets.DOCKERHUB_USERNAME }}
+#          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Publish to Docker Hub
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          file: ./tools/Dockerfile
+          push: false # ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.prep.outputs.tags }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+  lint:
+    needs: build
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ DOCKER_IMAGE }}
+#      credentials:
+#        username: ${{ secrets.DOCKERHUB_USERNAME }}
+#        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    steps:
+      - uses: actions/setup-go@v2
+        with:
+          go-version: 1.18
+
+      - uses: actions/checkout@v2
+
+      - uses: golangci/golangci-lint-action@v3.1.0
+        with:
+          version: v1.45.0
+          args: --timeout 3m
+          github-token: ${{ secrets.github_token }}
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ DOCKER_IMAGE }}
+#      credentials:
+#        username: ${{ secrets.DOCKERHUB_USERNAME }}
+#        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    steps:
+      - uses: actions/setup-go@v2
+        with:
+          go-version: 1.18
+
+      - uses: actions/checkout@v2
+
+      - name: test & coverage report creation
+        run: |
+          go test ./... -mod=readonly -timeout 3m -race -coverprofile=coverage.txt -covermode=atomic
+
+      - uses: codecov/codecov-action@v2.0.3
+        with:
+          file: ./coverage.txt
+          fail_ci_if_error: true
+
