@@ -1,6 +1,6 @@
 module github.com/line/gorocksdb
 
-go 1.17
+go 1.18
 
 require (
 	github.com/facebookgo/ensure v0.0.0-20200202191622-63f1cf65ac4c
