@@ -52,7 +52,7 @@ func cByteSlice(b []byte) *C.char {
 }
 
 // stringToChar returns *C.char from string.
-func stringToChar(s string) *C.char {
+func stringToChar(s string) *C.char { //nolint:deadcode
 	ptrStr := (*reflect.StringHeader)(unsafe.Pointer(&s))
 	return (*C.char)(unsafe.Pointer(ptrStr.Data))
 }
