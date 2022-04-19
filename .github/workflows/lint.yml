@@ -1,0 +1,39 @@
+name: Lint with Docker Image
+on:
+  workflow_call:
+    inputs:
+      CACHE_DIR:
+        required: true
+        type: string
+      CACHE_FILE:
+        required: true
+        type: string
+      TAG:
+        required: true
+        type: string
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Cache Docker Image
+        id: cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ inputs.CACHE_DIR }}
+          key: ${{ inputs.CACHE_FILE }}
+
+      - name: Load Docker Image
+        run: |
+          docker load -i ${{ inputs.CACHE_FILE }}
+
+      - name: lint
+        run: |
+          docker run --rm -v "$(pwd)":/workspace -w /workspace ${{ inputs.TAG }} bash -c "\
+          echo '-> Run go lint' \
+          && golangci-lint run -v \
+          && echo '-> Run go verify' \
+          && go mod verify \
+          "

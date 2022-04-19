@@ -1,0 +1,42 @@
+name: Test with Docker Image
+on:
+  workflow_call:
+    inputs:
+      CACHE_DIR:
+        required: true
+        type: string
+      CACHE_FILE:
+        required: true
+        type: string
+      TAG:
+        required: true
+        type: string
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Cache Docker Image
+        id: cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ inputs.CACHE_DIR }}
+          key: ${{ inputs.CACHE_FILE }}
+
+      - name: Load Docker Image
+        run: |
+          docker load -i ${{ inputs.CACHE_FILE }}
+
+      - name: test
+        run: |
+          docker run --rm -v "$(pwd)":/workspace -w /workspace ${{ inputs.TAG }} bash -c "\
+          echo '-> Run go test' \
+          && go test ./... -mod=readonly -timeout 3m -race -coverprofile=coverage.txt -covermode=atomic \
+          "
+
+      - uses: codecov/codecov-action@v2.0.3
+        with:
+          file: ./coverage.txt
+          fail_ci_if_error: true
