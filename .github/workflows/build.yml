@@ -1,0 +1,82 @@
+name: Build Docker with RocksDB
+on:
+  pull_request:
+  push:
+
+env:
+  GOMODFILE: ./go.mod
+  DOCKERFILE: ./tools/Dockerfile
+  DOCKER_NAME: gorocksdb-testing
+  DOCKER_IMAGE: line/gorocksdb-testing
+  CACHE_DIR: /tmp/line/gorocksdb-testing
+
+jobs:
+  cleanup-runs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: rokroskar/workflow-run-cleanup-action@master
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+    if: "!startsWith(github.ref, 'refs/tags/') && github.ref != 'refs/heads/main'"
+
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      CACHE_DIR: ${{ env.CACHE_DIR }}
+      CACHE_FILE: ${{ steps.prep.outputs.CACHE_FILE }}
+      TAG: ${{ steps.prep.outputs.TAG }}
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Prepare
+        id: prep
+        run: |
+          HASH_GOMOD=${{ hashFiles(env.GOMODFILE) }}
+          HASH_DOCKER=${{ hashFiles(env.DOCKERFILE) }}
+          VARIANT=$(TZ=UTC-9 date '+%Y%m')${HASH_GOMOD:0:7}${HASH_DOCKER:0:7}
+          NAME_TAR="${VARIANT}.tar"
+          CACHE_FILE=${{ env.CACHE_DIR }}"/${NAME_TAR}"
+          echo "::set-output name=CACHE_FILE::${CACHE_FILE}"
+
+          VERSION=latest
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          elif [[ $GITHUB_REF == refs/heads/* ]]; then
+            VERSION=$(echo ${GITHUB_REF#refs/heads/} | sed -r 's#/+#-#g')
+            if [ "${{ github.event.repository.default_branch }}" = "$VERSION" ]; then
+              VERSION=latest
+            fi
+          fi
+          TAG="${{ env.DOCKER_IMAGE }}:${VERSION}"
+          echo ::set-output name=TAG::${TAG}
+
+      - name: Cache Docker Image
+        id: cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.CACHE_DIR }}
+          key: ${{ steps.prep.outputs.CACHE_FILE }}
+
+      - name: Build Docker Image
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ${{ env.CACHE_DIR }}
+          docker build --rm -t ${{ steps.prep.outputs.TAG }} -f ${{ env.DOCKERFILE }} .
+          echo "-> Docker save: ${{ steps.prep.outputs.TAG }}"
+          docker save -o ${{ steps.prep.outputs.CACHE_FILE }} ${{ steps.prep.outputs.TAG }}
+
+  call-lint:
+    needs: build
+    uses: ./.github/workflows/lint.yml
+    with:
+      CACHE_DIR: ${{ needs.build.outputs.CACHE_DIR }}
+      CACHE_FILE: ${{ needs.build.outputs.CACHE_FILE }}
+      TAG: ${{ needs.build.outputs.TAG }}
+
+  call-test:
+    needs: build
+    uses: ./.github/workflows/test.yml
+    with:
+      CACHE_DIR: ${{ needs.build.outputs.CACHE_DIR }}
+      CACHE_FILE: ${{ needs.build.outputs.CACHE_FILE }}
+      TAG: ${{ needs.build.outputs.TAG }}
