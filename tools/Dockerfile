@@ -1,4 +1,4 @@
-FROM golang:1.16-bullseye AS build
+FROM golang:1.17-bullseye AS build
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     make tar wget
